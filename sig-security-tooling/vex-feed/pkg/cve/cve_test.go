@@ -1,4 +1,4 @@
-package main
+package cve
 
 import (
 	"testing"
@@ -138,29 +138,6 @@ func TestExtractJustification(t *testing.T) {
 			}
 			if !tt.wantHasDetails && gotDetails != "" {
 				t.Errorf("ExtractJustification() expected no details but got %q", gotDetails)
-			}
-		})
-	}
-}
-
-func TestNormalizeJustification(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"component_not_present", "component_not_present"},
-		{"vulnerable_code_not_present", "vulnerable_code_not_present"},
-		{"vulnerable_code_not_in_execute_path", "vulnerable_code_not_in_execute_path"},
-		{"vulnerable_code_cannot_be_controlled_by_adversary", "vulnerable_code_cannot_be_controlled_by_adversary"},
-		{"inline_mitigations_already_exist", "inline_mitigations_already_exist"},
-		{"", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			got := NormalizeJustification(tt.input)
-			if got != tt.want {
-				t.Errorf("NormalizeJustification(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}

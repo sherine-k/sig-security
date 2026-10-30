@@ -1,26 +1,11 @@
-package main
+package vexflow
 
 import (
 	"encoding/json"
 	"fmt"
 	"time"
-)
 
-const (
-	// DefaultKubernetesRepo is the source repository
-	DefaultKubernetesRepo = "github.com/kubernetes/kubernetes"
-
-	// DefaultVexflowRepo is the target repository for vexflow issues
-	DefaultVexflowRepo = "github.com/kubernetes/.vexflow"
-
-	// DefaultTargetBranch is the branch we're creating VEX data for
-	DefaultTargetBranch = "master"
-
-	// DefaultLabel is the label used to identify issues for vex feed
-	DefaultLabel = "vex-unaffected-feed"
-
-	// VexflowDataSeparator is the HTML comment separator used by vexflow
-	VexflowDataSeparator = "### VEXFLOW==DATA ###"
+	"github.com/kubernetes/sig-security/sig-security-tooling/vex-feed/pkg/cve"
 )
 
 // BuildVexflowMetadata constructs the vexflow metadata for an issue
@@ -149,22 +134,15 @@ For completeness, you can issue a `+backtick+`fixed`+backtick+` statement:
 }
 
 // RenderVexflowIssue creates a complete VexflowIssue from kubernetes/kubernetes issue data
-func RenderVexflowIssue(kubeIssue *KubernetesIssue, cveID string, component *Component, branchID string, now time.Time) (*VexflowIssue, error) {
-	// Extract comments as strings
-	comments := make([]string, len(kubeIssue.Comments))
-	for i, c := range kubeIssue.Comments {
-		comments[i] = c.Body
-	}
-
+func RenderVexflowIssue(sourceNumber int, sourceURL string, comments []string, cveID string, component *Component, branchID string, now time.Time) (*VexflowIssue, error) {
 	// Extract justification from comments
-	justification, justificationDetails := ExtractJustification(comments)
-	normalized := NormalizeJustification(justification)
+	justification, justificationDetails := cve.ExtractJustification(comments)
 
 	// Build vexflow metadata
 	metadata := BuildVexflowMetadata(cveID, component, branchID, now)
 
 	// Generate issue body
-	body, err := GenerateVexflowIssueBody(cveID, metadata, kubeIssue.URL, kubeIssue.Number)
+	body, err := GenerateVexflowIssueBody(cveID, metadata, sourceURL, sourceNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -174,11 +152,12 @@ func RenderVexflowIssue(kubeIssue *KubernetesIssue, cveID string, component *Com
 		Body:                 body,
 		Labels:               []string{"vex-unaffected-feed"},
 		SourceRepo:           DefaultKubernetesRepo,
-		SourceIssue:          kubeIssue.Number,
-		SourceURL:            kubeIssue.URL,
+		SourceIssue:          sourceNumber,
+		SourceURL:            sourceURL,
+		Sources:              []SourceAssessment{{Number: sourceNumber, URL: sourceURL, Justification: justification, JustificationDetails: justificationDetails}},
 		CVEIDs:               []string{cveID},
-		Component:            component,
-		Justification:        normalized,
+		Component:            metadata.Vulnerability.Component,
+		Justification:        justification,
 		JustificationDetails: justificationDetails,
 		VexflowData:          metadata,
 	}, nil

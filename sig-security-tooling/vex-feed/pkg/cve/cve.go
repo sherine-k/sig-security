@@ -1,4 +1,5 @@
-package main
+// Package cve extracts CVE IDs and not_affected justifications from issue text.
+package cve
 
 import (
 	"regexp"
@@ -14,10 +15,10 @@ var cveRE = regexp.MustCompile(`(?i)CVE-\d{4}-\d+`)
 func ExtractCVEs(title, body string, comments []string) []string {
 	// Combine all text
 	allText := strings.Join(append([]string{title, body}, comments...), " ")
-	
+
 	// Find all matches
 	matches := cveRE.FindAllString(allText, -1)
-	
+
 	// Convert to uppercase and deduplicate
 	seen := make(map[string]struct{})
 	var unique []string
@@ -28,7 +29,7 @@ func ExtractCVEs(title, body string, comments []string) []string {
 			unique = append(unique, upper)
 		}
 	}
-	
+
 	// Sort
 	slices.Sort(unique)
 	return unique
@@ -46,7 +47,7 @@ func ExtractJustification(comments []string) (justification, details string) {
 		"vulnerable_code_cannot_be_controlled_by_adversary",
 		"inline_mitigations_already_exist",
 	}
-	
+
 	for _, comment := range comments {
 		for _, pattern := range patterns {
 			if strings.Contains(strings.ToLower(comment), "/not_affected:"+pattern) {
@@ -61,19 +62,11 @@ func ExtractJustification(comments []string) (justification, details string) {
 				}
 				details = strings.Join(detailLines, " ")
 				details = strings.TrimSpace(details)
-				
+
 				return pattern, details
 			}
 		}
 	}
-	
-	return "", ""
-}
 
-// NormalizeJustification converts a vexflow slash command justification
-// to the OpenVEX justification label format if needed.
-func NormalizeJustification(vexflowJustification string) string {
-	// The vexflow justification names match the OpenVEX names
-	// (they use underscores instead of hyphens but the values are the same)
-	return vexflowJustification
+	return "", ""
 }

@@ -1,4 +1,5 @@
-package main
+// Package github retrieves Kubernetes issues using go-github.
+package github
 
 import (
 	"context"
@@ -6,10 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/google/go-github/v60/github"
+	"github.com/google/go-github/v93/github"
 )
 
-// GitHubClient handles interactions with the GitHub API
+// GitHubClient handles interactions with the GitHub API.
 type GitHubClient struct {
 	client *github.Client
 }
@@ -22,8 +23,10 @@ func NewGitHubClient() (*GitHubClient, error) {
 	}
 
 	// Create authenticated client
-	client := github.NewClient(nil).WithAuthToken(token)
-
+	client, error := github.NewClient(github.WithAuthToken(token))
+	if error != nil {
+		return nil, fmt.Errorf("creating GitHub client: %w", error)
+	}
 	return &GitHubClient{
 		client: client,
 	}, nil
@@ -32,27 +35,31 @@ func NewGitHubClient() (*GitHubClient, error) {
 // SearchIssues searches for issues using GitHub's search API with the given query
 func (gc *GitHubClient) SearchIssues(query string) ([]KubernetesIssue, error) {
 	ctx := context.Background()
-
-	// Search for issues
-	result, _, err := gc.client.Search.Issues(ctx, query, &github.SearchOptions{
+	options := &github.SearchOptions{
 		ListOptions: github.ListOptions{
 			PerPage: 100,
 		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("searching for issues: %w", err)
 	}
 
-	// Convert github.Issue to KubernetesIssue
-	issues := make([]KubernetesIssue, len(result.Issues))
-	for i, ghIssue := range result.Issues {
-		issues[i] = KubernetesIssue{
-			Number: ghIssue.GetNumber(),
-			Title:  ghIssue.GetTitle(),
-			Body:   ghIssue.GetBody(),
-			URL:    ghIssue.GetHTMLURL(),
-			State:  ghIssue.GetState(),
+	var issues []KubernetesIssue
+	for {
+		result, response, err := gc.client.Search.Issues(ctx, query, options)
+		if err != nil {
+			return nil, fmt.Errorf("searching for issues: %w", err)
 		}
+		for _, ghIssue := range result.Issues {
+			issues = append(issues, KubernetesIssue{
+				Number: ghIssue.GetNumber(),
+				Title:  ghIssue.GetTitle(),
+				Body:   ghIssue.GetBody(),
+				URL:    ghIssue.GetHTMLURL(),
+				State:  ghIssue.GetState(),
+			})
+		}
+		if response.NextPage == 0 {
+			break
+		}
+		options.Page = response.NextPage
 	}
 
 	return issues, nil
@@ -69,14 +76,10 @@ func (gc *GitHubClient) GetIssueDetails(owner, repo string, issueNumber int) (*K
 		return nil, fmt.Errorf("fetching issue #%d: %w", issueNumber, err)
 	}
 
-	// Fetch all comments for this issue
-	ghComments, _, err := gc.client.Issues.ListComments(ctx, owner, repo, issueNumber, &github.IssueListCommentsOptions{
+	options := &github.IssueListCommentsOptions{
 		ListOptions: github.ListOptions{
 			PerPage: 100,
 		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("fetching comments for issue #%d: %w", issueNumber, err)
 	}
 
 	// Convert to KubernetesIssue
@@ -86,18 +89,20 @@ func (gc *GitHubClient) GetIssueDetails(owner, repo string, issueNumber int) (*K
 		Body:   ghIssue.GetBody(),
 		URL:    ghIssue.GetHTMLURL(),
 		State:  ghIssue.GetState(),
-		Comments: make([]struct {
-			Body string `json:"body"`
-		}, len(ghComments)),
 	}
 
-	// Convert comments
-	for i, comment := range ghComments {
-		issue.Comments[i] = struct {
-			Body string `json:"body"`
-		}{
-			Body: comment.GetBody(),
+	for {
+		comments, response, err := gc.client.Issues.ListComments(ctx, owner, repo, issueNumber, options)
+		if err != nil {
+			return nil, fmt.Errorf("fetching comments for issue #%d: %w", issueNumber, err)
 		}
+		for _, comment := range comments {
+			issue.Comments = append(issue.Comments, Comment{Body: comment.GetBody()})
+		}
+		if response.NextPage == 0 {
+			break
+		}
+		options.Page = response.NextPage
 	}
 
 	return issue, nil

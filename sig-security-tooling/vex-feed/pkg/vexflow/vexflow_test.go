@@ -1,4 +1,4 @@
-package main
+package vexflow
 
 import (
 	"strings"
@@ -106,18 +106,8 @@ func TestGenerateVexflowIssueBody(t *testing.T) {
 
 func TestRenderVexflowIssue(t *testing.T) {
 	now := time.Now()
-	kubeIssue := &KubernetesIssue{
-		Number: 123456,
-		Title:  "CVE-2026-25681 vulnerability",
-		Body:   "This affects the x/net package",
-		URL:    "https://github.com/kubernetes/kubernetes/issues/123456",
-		State:  "open",
-		Comments: []struct {
-			Body string `json:"body"`
-		}{
-			{Body: "/not_affected:vulnerable_code_not_present\nThe code path is not used."},
-		},
-	}
+	sourceURL := "https://github.com/kubernetes/kubernetes/issues/123456"
+	comments := []string{"/not_affected:vulnerable_code_not_present\nThe code path is not used."}
 
 	component := &Component{
 		Type:    "golang",
@@ -126,7 +116,7 @@ func TestRenderVexflowIssue(t *testing.T) {
 		PURL:    "pkg:golang/golang.org/x/net@v0.0.0-20220127200216-cd36cc0744dd",
 	}
 
-	vexIssue, err := RenderVexflowIssue(kubeIssue, "CVE-2026-25681", component, "github.com/kubernetes/kubernetes@master", now)
+	vexIssue, err := RenderVexflowIssue(123456, sourceURL, comments, "CVE-2026-25681", component, "github.com/kubernetes/kubernetes@master", now)
 	if err != nil {
 		t.Fatalf("RenderVexflowIssue() error = %v", err)
 	}
@@ -160,18 +150,9 @@ func TestRenderVexflowIssue(t *testing.T) {
 
 func TestVexflowIssueWithoutJustification(t *testing.T) {
 	now := time.Now()
-	kubeIssue := &KubernetesIssue{
-		Number: 123456,
-		Title:  "CVE-2026-25681 vulnerability",
-		Body:   "This affects the x/net package",
-		URL:    "https://github.com/kubernetes/kubernetes/issues/123456",
-		State:  "open",
-		Comments: []struct {
-			Body string `json:"body"`
-		}{},
-	}
+	sourceURL := "https://github.com/kubernetes/kubernetes/issues/123456"
 
-	vexIssue, err := RenderVexflowIssue(kubeIssue, "CVE-2026-25681", nil, "github.com/kubernetes/kubernetes@master", now)
+	vexIssue, err := RenderVexflowIssue(123456, sourceURL, nil, "CVE-2026-25681", nil, "github.com/kubernetes/kubernetes@master", now)
 	if err != nil {
 		t.Fatalf("RenderVexflowIssue() error = %v", err)
 	}
@@ -186,5 +167,8 @@ func TestVexflowIssueWithoutJustification(t *testing.T) {
 
 	if vexIssue.VexflowData.Status != "WAITING_USER" {
 		t.Errorf("Status = %q, want %q", vexIssue.VexflowData.Status, "WAITING_USER")
+	}
+	if vexIssue.Component == nil || vexIssue.Component.PURL != vexIssue.VexflowData.Vulnerability.Component.PURL {
+		t.Error("exported component should match the embedded metadata")
 	}
 }
